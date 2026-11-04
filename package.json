@@ -1,0 +1,29 @@
+{
+  "name": "short-link",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.16.0"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --experimental-test-module-mocks --test back/test/*.test.mjs",
+    "test:integration": "node --experimental-test-module-mocks --test back/test/integration/*.test.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run format:check && npm test && npm run build",
+    "infra:init": "terraform -chdir=infra init -input=false",
+    "infra:check": "terraform -chdir=infra fmt -check -recursive && terraform -chdir=infra validate",
+    "infra:test": "terraform -chdir=infra test",
+    "plan": "node scripts/infra.mjs plan",
+    "deploy": "node scripts/infra.mjs apply"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "3.1161.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "prettier": "3.9.10"
+  }
+}

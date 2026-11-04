@@ -1,0 +1,9 @@
+node_modules/
+back/dist/
+infra/
+package-lock.json
+.env*
+.aws/
+.codex/
+.git/
+.secrets/

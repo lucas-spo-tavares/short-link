@@ -1,0 +1,5 @@
+name             = "short-link"
+region           = "sa-east-1"
+environment      = "production"
+hosted_zone_name = "lucas-tavares.com"
+domain_name      = "link.lucas-tavares.com"
