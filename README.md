@@ -110,9 +110,23 @@ O código aceita apenas o formato `[a-z]{6}`. Código inexistente ou fora desse 
 
 Erros da aplicação terão JSON com `error` e `requestId`, sem stack trace, API key ou URL de destino. Erros produzidos diretamente pelo API Gateway podem ter outro formato. A API não fará cache de respostas autenticadas.
 
+## Bruno
+
+O workspace em [`bruno/`](bruno/README.md) contém as requisições de criação e resolução de links (`POST`, `GET` e `HEAD`). A administração de API keys fica fora do Bruno, por invocação direta da Lambda com IAM, via CLI ou console AWS. Abra `bruno/workspace.yml`, selecione o ambiente **Production** e configure os secrets conforme o README da coleção.
+
 ## Administração das API keys
 
 Função prevista: `short-link-api-keys`. Invocação síncrona (`RequestResponse`), com um objeto JSON de entrada.
+
+Os comandos abaixo usam AWS CLI v2 e `jq`, com autenticação IAM do perfil/SSO configurado:
+
+```sh
+npm run api-key:add -- "integracao"
+npm run api-key:list
+npm run api-key:delete -- "UUID-DA-CHAVE"
+```
+
+O script `scripts/api-key.sh` lê `.env.deploy` e `.env`, com prioridade para as variáveis exportadas no terminal. Usa `API_KEYS_FUNCTION_NAME`, `AWS_REGION` e `AWS_PROFILE`. A criação exige um nome, e a exclusão exige o `keyId` UUID retornado pela criação ou listagem. O resultado é exibido como JSON; erros da AWS ou da aplicação encerram o comando com falha. A chave completa aparece na saída de criação; o arquivo temporário da resposta é removido ao terminar.
 
 | Ação    | Payload                                   | Resultado                                                                         |
 | ------- | ----------------------------------------- | --------------------------------------------------------------------------------- |
@@ -242,6 +256,31 @@ A implementação deverá disponibilizar instalação reproduzível com lockfile
 O deploy deverá publicar os bundles das duas funções e expor como outputs a URL base, os nomes das funções, as tabelas e a região. A primeira API key será criada por invocação direta da Lambda administrativa após o provisionamento.
 
 O state local e seus backups precisam ser preservados fora do Git. As variáveis locais, credenciais, arquivos de resposta com API keys, bundles e planos Terraform também deverão ser ignorados. Não haverá pipeline de CI nesta etapa.
+
+## Configuração após o deploy
+
+Os outputs do ambiente de produção foram salvos no `.env` local, ignorado pelo Git:
+
+| Variável local           | Valor                            |
+| ------------------------ | -------------------------------- |
+| `BASE_URL`               | `https://link.lucas-tavares.com` |
+| `AWS_REGION`             | `sa-east-1`                      |
+| `LINKS_FUNCTION_NAME`    | `short-link-links`               |
+| `API_KEYS_FUNCTION_NAME` | `short-link-api-keys`            |
+| `LINKS_TABLE`            | `short-link-links`               |
+| `KEYS_TABLE`             | `short-link-api-keys`            |
+
+Para disponibilizar essas variáveis no terminal atual:
+
+```sh
+set -a
+source .env
+set +a
+```
+
+O Terraform já configura `BASE_URL`, `LINKS_TABLE` e `KEYS_TABLE` nas Lambdas correspondentes. O `.env` serve para uso local; os comandos de infraestrutura continuam lendo `.env.deploy`.
+
+O ambiente **Production** do Bruno usa a mesma URL base. A API key deve ser criada por invocação direta da Lambda administrativa e preenchida no secret `apiKey` do Bruno.
 
 ## Validação da implementação
 

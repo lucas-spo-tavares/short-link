@@ -5,8 +5,16 @@ const { generateApiKey } = security;
 let currentStore;
 let currentCodeGenerator = security.generateCode;
 
+// Keep the captured store reference stable while each fixture supplies its own data.
+const storeProxy = new Proxy(
+  {},
+  {
+    get: (_, property) => currentStore[property],
+  },
+);
+
 mock.module('../src/shared/runtime.mjs', {
-  namedExports: { invocationStore: () => currentStore },
+  namedExports: { invocationStore: () => storeProxy },
 });
 mock.module('../src/shared/security.mjs', {
   namedExports: { ...security, generateCode: () => currentCodeGenerator() },
@@ -15,13 +23,14 @@ mock.module('node:timers/promises', {
   namedExports: { setTimeout: async () => {} },
 });
 
+process.env.BASE_URL = 'https://link.lucas-tavares.com';
+
 export const { handler: linksHandler } = await import('../src/links.mjs');
 export const { handler: apiKeysHandler } = await import('../src/api-keys.mjs');
 
 export function configureHandlers({ store, log, codeGenerator = security.generateCode }) {
   currentStore = store;
   currentCodeGenerator = codeGenerator;
-  process.env.BASE_URL = 'https://link.lucas-tavares.com';
   mock.method(console, 'info', log);
 }
 

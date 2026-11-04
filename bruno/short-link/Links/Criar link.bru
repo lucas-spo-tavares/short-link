@@ -1,0 +1,33 @@
+meta {
+  name: Criar link
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/links
+  body: json
+  auth: none
+}
+
+headers {
+  content-type: application/json
+  x-api-key: {{apiKey}}
+}
+
+body:json {
+  {
+    "url": "{{destinationUrl}}"
+  }
+}
+
+script:post-response {
+  if ([200, 201].includes(res.status) && res.body.code) {
+    bru.setVar("code", res.body.code);
+  }
+}
+
+docs {
+  Cria um link ou retorna a associação existente para a URL exata.
+  Requer apiKey. O código retornado fica disponível nas próximas requisições da sessão.
+}

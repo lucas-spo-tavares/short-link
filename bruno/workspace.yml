@@ -1,0 +1,7 @@
+opencollection: 1.0.0
+info:
+  name: Short Link
+  type: workspace
+collections:
+  - name: Short Link API
+    path: short-link

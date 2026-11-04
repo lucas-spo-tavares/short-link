@@ -1,0 +1,20 @@
+meta {
+  name: Consultar link
+  type: http
+  seq: 3
+}
+
+head {
+  url: {{baseUrl}}/{{code}}
+  body: none
+  auth: none
+}
+
+settings {
+  followRedirects: false
+}
+
+docs {
+  Resolução pública, sem API key. Retorna 302 e o destino no header Location.
+  Usa o code retornado por Criar link ou o valor preenchido no ambiente.
+}

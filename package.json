@@ -17,7 +17,10 @@
     "infra:check": "terraform -chdir=infra fmt -check -recursive && terraform -chdir=infra validate",
     "infra:test": "terraform -chdir=infra test",
     "plan": "node scripts/infra.mjs plan",
-    "deploy": "node scripts/infra.mjs apply"
+    "deploy": "node scripts/infra.mjs apply",
+    "api-key:add": "sh scripts/api-key.sh add",
+    "api-key:delete": "sh scripts/api-key.sh delete",
+    "api-key:list": "sh scripts/api-key.sh list"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "3.1161.0"
