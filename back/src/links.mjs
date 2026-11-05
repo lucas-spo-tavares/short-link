@@ -5,7 +5,6 @@ import { authenticate, generateCode, sha256 } from './shared/security.mjs';
 import { parseBody, validateUrl } from './shared/validation.mjs';
 import { invocationStore } from './shared/runtime.mjs';
 
-const store = invocationStore();
 const baseUrl = process.env.BASE_URL;
 const maxAttempts = 6;
 
@@ -16,7 +15,7 @@ const existingCode = (item, url) => {
   return item.code;
 };
 
-async function createLink(url, keyId) {
+async function createLink(store, url, keyId) {
   const hash = sha256(url);
   const previous = await store.getUrl(hash);
 
@@ -48,6 +47,8 @@ async function createLink(url, keyId) {
 }
 
 export async function handler(event, context = {}) {
+  // The store's abort signal belongs to this invocation, not the Lambda instance.
+  const store = invocationStore();
   const requestId = context.awsRequestId ?? event?.requestContext?.requestId ?? randomUUID();
   const method = event?.requestContext?.http?.method;
   const path = event?.rawPath;
@@ -72,7 +73,7 @@ export async function handler(event, context = {}) {
       }
 
       const url = validateUrl(parseBody(event).url, baseUrl);
-      const result = await createLink(url, keyId);
+      const result = await createLink(store, url, keyId);
       statusCode = result.created ? 201 : 200;
       body = JSON.stringify({
         code: result.code,
