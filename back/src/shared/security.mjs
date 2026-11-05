@@ -9,7 +9,8 @@ export function sha256(value) {
 }
 
 export function generateCode() {
-  return Array.from({ length: 6 }, () => String.fromCharCode(97 + randomInt(26))).join('');
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  return Array.from({ length: 8 }, () => alphabet[randomInt(alphabet.length)]).join('');
 }
 
 export function generateApiKey() {

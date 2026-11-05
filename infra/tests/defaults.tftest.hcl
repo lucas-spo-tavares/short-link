@@ -73,7 +73,7 @@ run "personal_backend" {
   }
 
   assert {
-    condition     = jsondecode(aws_iam_role_policy.lambda["links"].policy).Statement[2].Action == ["dynamodb:GetItem"]
-    error_message = "A Lambda de links deve apenas ler a tabela de chaves."
+    condition     = jsondecode(aws_iam_role_policy.lambda["links"].policy).Statement[2].Action == ["dynamodb:GetItem", "dynamodb:ConditionCheckItem"]
+    error_message = "A Lambda de links deve apenas ler e conferir condições na tabela de chaves."
   }
 }

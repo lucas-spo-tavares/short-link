@@ -42,10 +42,32 @@ export function memoryStore() {
   const keys = new Map();
   const codes = new Map();
   const urls = new Map();
+  const rates = new Map();
   return {
+    rates,
     keys,
     codes,
     urls,
+    async getRateLimit(key) {
+      return rates.get(key);
+    },
+    async putRateLimit(key, item, version) {
+      if (rates.get(key)?.version !== version) throw namedError('ConditionalCheckFailedException');
+      rates.set(key, structuredClone(item));
+    },
+    async consumeCode(code, now, version) {
+      const item = codes.get(code);
+      if (
+        !item ||
+        item.version !== version ||
+        item.maxAccesses === undefined ||
+        item.expiresAt <= now ||
+        item.accessCount >= item.maxAccesses
+      )
+        return false;
+      item.accessCount++;
+      return true;
+    },
     async getKey(id) {
       return keys.get(id);
     },
@@ -64,8 +86,27 @@ export function memoryStore() {
     async listKeys() {
       return [...keys.values()];
     },
+    async putCustomLink({ previous, takeover = false, ...item }) {
+      const current = codes.get(item.code);
+      if (
+        !!current !== !!previous ||
+        current?.version !== previous?.version ||
+        (current &&
+          current.createdByKeyId !== (takeover ? previous.createdByKeyId : item.createdByKeyId)) ||
+        (takeover && keys.has(previous.createdByKeyId))
+      ) {
+        throw namedError('TransactionCanceledException', {
+          CancellationReasons: [{ Code: 'ConditionalCheckFailed' }],
+        });
+      }
+      codes.set(item.code, {
+        ...item,
+        ...item.options,
+        ...(item.options.maxAccesses === undefined ? {} : { accessCount: 0 }),
+      });
+    },
     async putLink(item) {
-      if (codes.has(item.code) || urls.has(item.hash)) {
+      if (codes.has(item.code) || urls.get(item.hash)?.code !== item.previousCode) {
         throw namedError('TransactionCanceledException', {
           CancellationReasons: [
             { Code: codes.has(item.code) ? 'ConditionalCheckFailed' : 'None' },
@@ -73,7 +114,11 @@ export function memoryStore() {
           ],
         });
       }
-      codes.set(item.code, { ...item });
+      codes.set(item.code, {
+        ...item,
+        ...item.options,
+        ...(item.options?.maxAccesses === undefined ? {} : { accessCount: 0 }),
+      });
       urls.set(item.hash, { ...item });
     },
   };
@@ -89,7 +134,7 @@ export function post(apiKey, url = 'https://example.com/a?b=2&a=1') {
 }
 
 export function get(code, method = 'GET') {
-  return { rawPath: `/${code}`, requestContext: { http: { method } } };
+  return { rawPath: `/${code}`, requestContext: { http: { method, sourceIp: '192.0.2.1' } } };
 }
 
 export function fixture(options = {}) {

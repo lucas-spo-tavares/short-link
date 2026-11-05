@@ -5,6 +5,7 @@ import { mock, test } from 'node:test';
 mock.module('../src/shared/store.mjs', {
   namedExports: {
     createStore: ({ abortSignal }) => ({
+      async getRateLimit() {},
       async getCode() {
         abortSignal.throwIfAborted();
         return { url: 'https://example.com/destination' };
@@ -27,7 +28,7 @@ test('warm Lambda invocations get fresh DynamoDB timeouts after earlier signals 
   for (const method of ['GET', 'GET', 'HEAD']) {
     const response = await handler({
       rawPath: '/abcdef',
-      requestContext: { http: { method } },
+      requestContext: { http: { method, sourceIp: '192.0.2.1' } },
     });
     assert.equal(response.statusCode, 302);
     assert.equal(response.headers.location, 'https://example.com/destination');

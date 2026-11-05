@@ -7,10 +7,17 @@ import {
 } from '@aws-sdk/client-dynamodb';
 import { randomUUID } from 'node:crypto';
 
-// All stored fields are strings. Keep the SDK wire format at this boundary.
-const encode = (item) => Object.fromEntries(Object.entries(item).map(([k, v]) => [k, { S: v }]));
+// Keep DynamoDB types at this boundary; timestamps and counters use numbers.
+const encode = (item) =>
+  Object.fromEntries(
+    Object.entries(item).map(([k, v]) => [k, typeof v === 'number' ? { N: String(v) } : { S: v }]),
+  );
 const decode = (item) =>
-  item ? Object.fromEntries(Object.entries(item).map(([k, v]) => [k, v.S])) : undefined;
+  item
+    ? Object.fromEntries(
+        Object.entries(item).map(([k, v]) => [k, v.N === undefined ? v.S : Number(v.N)]),
+      )
+    : undefined;
 
 export function createStore({ client, linksTable, keysTable, abortSignal }) {
   const send = (command) => client.send(command, { abortSignal });
@@ -24,20 +31,155 @@ export function createStore({ client, linksTable, keysTable, abortSignal }) {
     getKey: (keyId) => get(keysTable, { keyId }),
     getCode: (code) => get(linksTable, { pk: `CODE#${code}` }),
     getUrl: (hash) => get(linksTable, { pk: `URL#${hash}` }),
-    async putLink({ hash, code, url, createdAt, createdByKeyId }) {
+    async getRateLimit(key) {
+      const item = await get(linksTable, { pk: `IP#${key}` });
+      return item ? { version: item.version, state: JSON.parse(item.state) } : undefined;
+    },
+    async putRateLimit(key, item, previousVersion) {
+      await send(
+        new PutItemCommand({
+          TableName: linksTable,
+          Item: encode({
+            pk: `IP#${key}`,
+            version: item.version,
+            state: JSON.stringify(item.state),
+          }),
+          ConditionExpression: previousVersion
+            ? '#version = :previous'
+            : 'attribute_not_exists(pk)',
+          ...(previousVersion
+            ? {
+                ExpressionAttributeNames: { '#version': 'version' },
+                ExpressionAttributeValues: encode({ ':previous': previousVersion }),
+              }
+            : {}),
+        }),
+      );
+    },
+    async consumeCode(code, now, version) {
+      try {
+        await send(
+          new TransactWriteItemsCommand({
+            // Reusing this token for SDK retries prevents double consumption.
+            ClientRequestToken: randomUUID(),
+            TransactItems: [
+              {
+                Update: {
+                  TableName: linksTable,
+                  Key: encode({ pk: `CODE#${code}` }),
+                  UpdateExpression: 'ADD accessCount :one',
+                  ConditionExpression:
+                    'attribute_exists(pk) AND (attribute_not_exists(expiresAt) OR expiresAt > :now) AND accessCount < maxAccesses AND ' +
+                    (version === undefined
+                      ? 'attribute_not_exists(#version)'
+                      : '#version = :version'),
+                  ExpressionAttributeNames: { '#version': 'version' },
+                  ExpressionAttributeValues: encode({
+                    ':one': 1,
+                    ':now': now,
+                    ...(version === undefined ? {} : { ':version': version }),
+                  }),
+                },
+              },
+            ],
+          }),
+        );
+        return true;
+      } catch (error) {
+        if (
+          error.name === 'TransactionCanceledException' &&
+          error.CancellationReasons?.some((reason) => reason.Code === 'ConditionalCheckFailed')
+        )
+          return false;
+        throw error;
+      }
+    },
+    async putCustomLink({
+      code,
+      url,
+      createdAt,
+      createdByKeyId,
+      options,
+      version,
+      previous,
+      takeover = false,
+    }) {
+      await send(
+        new TransactWriteItemsCommand({
+          ClientRequestToken: randomUUID(),
+          TransactItems: [
+            {
+              Put: {
+                TableName: linksTable,
+                Item: encode({
+                  pk: `CODE#${code}`,
+                  url,
+                  createdAt,
+                  createdByKeyId,
+                  ...options,
+                  version,
+                  ...(options.maxAccesses === undefined ? {} : { accessCount: 0 }),
+                }),
+                ConditionExpression: !previous
+                  ? 'attribute_not_exists(pk)'
+                  : previous.version === undefined
+                    ? 'createdByKeyId = :owner AND attribute_not_exists(#version)'
+                    : 'createdByKeyId = :owner AND #version = :previous',
+                ...(previous ? { ExpressionAttributeNames: { '#version': 'version' } } : {}),
+                ...(previous
+                  ? {
+                      ExpressionAttributeValues: encode({
+                        ':owner': takeover ? previous.createdByKeyId : createdByKeyId,
+                        ...(previous.version === undefined
+                          ? {}
+                          : { ':previous': previous.version }),
+                      }),
+                    }
+                  : {}),
+              },
+            },
+            ...(takeover
+              ? [
+                  {
+                    ConditionCheck: {
+                      TableName: keysTable,
+                      Key: encode({ keyId: previous.createdByKeyId }),
+                      ConditionExpression: 'attribute_not_exists(keyId)',
+                    },
+                  },
+                ]
+              : []),
+          ],
+        }),
+      );
+    },
+    async putLink({ hash, code, url, createdAt, createdByKeyId, options = {}, previousCode }) {
       const items = [
-        { pk: `CODE#${code}`, url, createdAt, createdByKeyId },
+        {
+          pk: `CODE#${code}`,
+          url,
+          createdAt,
+          createdByKeyId,
+          ...options,
+          ...(options.maxAccesses === undefined ? {} : { accessCount: 0 }),
+        },
         { pk: `URL#${hash}`, url, code, createdAt },
       ];
       await send(
         new TransactWriteItemsCommand({
           // SDK retries of this exact request cannot create ambiguous duplicate writes.
           ClientRequestToken: randomUUID(),
-          TransactItems: items.map((item) => ({
+          TransactItems: items.map((item, index) => ({
             Put: {
               TableName: linksTable,
               Item: encode(item),
-              ConditionExpression: 'attribute_not_exists(pk)',
+              ConditionExpression:
+                index === 1 && previousCode ? 'code = :previous' : 'attribute_not_exists(pk)',
+              ...(index === 1 && previousCode
+                ? {
+                    ExpressionAttributeValues: encode({ ':previous': previousCode }),
+                  }
+                : {}),
             },
           })),
         }),

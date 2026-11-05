@@ -12,6 +12,8 @@ Selecione o ambiente **Production**. Ajuste `baseUrl` se o output do Terraform f
 
 Preencha `apiKey` na aba de secrets do ambiente. Após criar um link, o script guarda `code` em memória para as próximas requisições. Também é possível preencher `code` manualmente. GET e HEAD não seguem redirects, permitindo inspecionar o `302` e o header `Location`.
 
+Para escolher um endereço fixo, adicione `"code": "meu-link"` ao JSON de **Criar link**. Se existir e pertencer ao mesmo ID de API key (mesmo expirado), ou se a chave proprietária tiver sido excluída, o destino e todas as opções desse código serão substituídos e o contador de acessos será reiniciado. Omitir `expiresAt` e `maxAccesses` remove os limites anteriores. Se a chave proprietária ainda existir, outra API key recebe `403`. Após assumir um código de chave excluída, a nova chave torna-se proprietária. Sem `code`, a geração e a deduplicação automáticas continuam funcionando.
+
 ## API keys
 
 Crie a API key por invocação direta da Lambda administrativa, usando a AWS CLI ou o console AWS com permissão IAM `lambda:InvokeFunction`. O [README do projeto](../README.md#administração-das-api-keys) contém o exemplo de invocação.

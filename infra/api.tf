@@ -38,12 +38,12 @@ resource "aws_iam_role_policy" "lambda" {
       ], each.key == "links" ? [
       {
         Effect   = "Allow"
-        Action   = ["dynamodb:GetItem", "dynamodb:PutItem"]
+        Action   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"]
         Resource = aws_dynamodb_table.app["links"].arn
       },
       {
         Effect   = "Allow"
-        Action   = ["dynamodb:GetItem"]
+        Action   = ["dynamodb:GetItem", "dynamodb:ConditionCheckItem"]
         Resource = aws_dynamodb_table.app["api-keys"].arn
       }
       ] : [

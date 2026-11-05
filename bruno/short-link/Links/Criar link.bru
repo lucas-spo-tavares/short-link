@@ -28,6 +28,14 @@ script:post-response {
 }
 
 docs {
-  Cria um link ou retorna a associação existente para a URL exata.
+  Cria um link ou retorna a associação disponível para a URL exata e as mesmas opções.
+  Campo opcional code: escolhe o código (1–64 caracteres [a-z0-9_-], começando por letra ou número).
+  A proprietária pode substituir mesmo expirado. Outra apiKey só pode assumir se a proprietária tiver sido excluída; caso contrário, recebe 403.
+  Se já existir, substitui destino e opções e reinicia os acessos (200); caso novo, retorna 201.
+  Exemplo: {"url":"https://example.com/atual","code":"meu-link"}.
+  Sem code, mantém a geração e deduplicação automáticas.
+  Opções no JSON: expiresAt (data futura UTC ISO 8601) e maxAccesses (inteiro positivo).
+  Omitir as opções mantém o link sem expiração e com acessos ilimitados.
+  GET e HEAD consomem acessos dos links limitados.
   Requer apiKey. O código retornado fica disponível nas próximas requisições da sessão.
 }
